@@ -5,77 +5,39 @@ function model = build_tool_model_step1()
     model.t = 0.001;
     model.analysisType = "plane_stress";
 
-    % -----------------------------
-    % Node coordinates
-    % -----------------------------
-    model.X = [
-        0.00000;   % 1
-        0.00050;   % 2
-        0.00600;   % 3
-        0.01200;   % 4
-        0.00039;   % 5
-        0.00325;   % 6
-        0.00860;   % 7
-        0.01160;   % 8
-        0.00078;   % 9
-        0.00600;   % 10
-        0.01120    % 11
-    ];
+    % ----------------------------------------
+    % Get graded mesh automatically
+    % ----------------------------------------
+    [X,Y,ncon] = generate_graded_mesh();
 
-    model.Y = [
-         0.00000;   % 1
-         0.00000;   % 2
-         0.00000;   % 3
-         0.00000;   % 4
-        -0.00200;   % 5
-        -0.00200;   % 6
-        -0.00200;   % 7
-        -0.00200;   % 8
-        -0.00400;   % 9
-        -0.00400;   % 10
-        -0.00400    % 11
-    ];
+    model.X = X;
+    model.Y = Y;
+    model.ncon = ncon;
 
     model.n_nodes = length(model.X);
-
-    % -----------------------------
-    % Triangular connectivity
-    % Counterclockwise ordering
-    % -----------------------------
-    model.ncon = [
-        1 5 2;
-        2 5 6;
-        2 6 3;
-        3 6 7;
-        3 7 4;
-        4 7 8;
-        5 9 6;
-        6 9 10;
-        6 10 7;
-        7 10 11;
-        7 11 8
-    ];
-
     model.n_element = size(model.ncon,1);
 
-    % -----------------------------
-    % Load vector
-    % -----------------------------
-    model.F = zeros(2*model.n_nodes,1);
+    % ----------------------------------------
+    % Distributed load over contact region
+    % ----------------------------------------
+    Fc = 200;      % total cutting force (N)
+    Ft = -100;     % total thrust force (N)
 
-    Fc = 200;      % N
-    Ft = -100;     % N
+    model.F = build_distributed_load(model.X,model.Y,model.n_nodes,Fc,Ft);
 
-    % still using simple test load near cutting side
-    model.F(3) = Fc;
-    model.F(4) = Ft;
+    % ----------------------------------------
+    % Boundary conditions
+    % Fix nodes on the rear/right side
+    % ----------------------------------------
+    rearNodes = find(model.X > 0.0110);
 
-    % -----------------------------
-    % Fixed DOFs
-    % Clamp rear side of tool
-    % Here: fix nodes 4, 8, 11
-    % -----------------------------
-    model.dzero = [7 8 15 16 21 22]';
+    dzero = [];
+    for k = 1:length(rearNodes)
+        n = rearNodes(k);
+        dzero = [dzero; 2*n-1; 2*n];
+    end
+
+    model.dzero = dzero;
     model.NDU = length(model.dzero);
 
 end

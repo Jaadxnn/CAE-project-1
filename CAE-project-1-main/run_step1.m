@@ -81,33 +81,19 @@ disp(Sy);
 disp('Element stress Sxy = ');
 disp(Sxy);
 
-scale = 100; % adjust visually
+scale = 20; % adjust visually
 
 Xd = X + scale*U(1:2:end);
 Yd = Y + scale*U(2:2:end);
 
 Sn = nodal_stress_average(n_nodes,ncon,Sx);
 
-figure;
-patch('Faces',ncon,...
-      'Vertices',[Xd Yd],...
-      'FaceVertexCData',Sn,...
-      'FaceColor','interp',...
-      'EdgeColor','k');
+plot_smoothed_stress_clipped(ncon,X,Y,Sn,'Smoothed Stress Sx');
+plot_deformed_with_stress(n_nodes,ncon,X,Y,U,Sn);
 
-colorbar;
-axis equal;
-title('Deformed Shape with Stress');
+Ux = U(1:2:end);
+Uy = U(2:2:end);
+Umag = sqrt(Ux.^2 + Uy.^2);
 
-Sn = nodal_stress_average(n_nodes,ncon,Sx);
-
-figure;
-patch('Faces',ncon,...
-      'Vertices',[X Y],...
-      'FaceVertexCData',Sn,...
-      'FaceColor','interp',...   % THIS is key
-      'EdgeColor','k');
-
-colorbar;
-axis equal;
-title('Smoothed Stress Sx');
+disp('Maximum displacement magnitude = ');
+disp(max(Umag));
