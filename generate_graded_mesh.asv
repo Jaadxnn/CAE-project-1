@@ -1,0 +1,141 @@
+function [X,Y,ncon] = generate_graded_mesh()
+% GENERATE_GRADED_MESH
+% Generates a graded triangular mesh for the cutting tool.
+%
+% Meshing strategy:
+% - Finest mesh at the contact corner near x = 0 to 0.0005 m
+% - Medium refinement in the nearby tool body
+% - Coarser mesh toward the opposite rear corner
+% This is intended to mimic ANSYS-style graded refinement toward
+% the expected high stress gradient region.
+
+    % ----------------------------------------
+    % 1. Boundary polygon of the cutting tool
+    % ----------------------------------------
+    [xb,yb] = build_tool_boundary();
+
+    % ----------------------------------------
+    % 2. Graded x locations
+    % Ultra-fine near actual contact corner
+    % ----------------------------------------
+    x_contact = linspace(0.0000, 0.0005, 18);   % MOST refined zone
+    x_fine    = linspace(0.0005, 0.0020, 16);   % next refinement zone
+    x_mid     = linspace(0.0020, 0.0070, 12);   % medium zone
+    x_coarse  = linspace(0.0070, 0.0120, 8);    % coarse zone
+
+    x_all = unique([x_contact, x_fine, x_mid, x_coarse]);
+
+    % ----------------------------------------
+    % 3. Base y locations through thickness
+    % ----------------------------------------
+    y_all = linspace(-0.0040, 0.0000, 15);
+
+    % ----------------------------------------
+    % 4. Base background grid
+    % ----------------------------------------
+    [xg,yg] = meshgrid(x_all, y_all);
+    xg = xg(:);
+    yg = yg(:);
+
+    % ----------------------------------------
+    % 5. Extra local seed points near the contact corner
+    % This creates the highest density exactly where load/contact occurs
+    % ----------------------------------------
+    x_local = linspace(0.0000, 0.0005, 20);
+
+    % Bias y-points toward the top surface (y = 0)
+    y_local = [ ...
+        0.0000
+       -0.00005
+       -0.00010
+       -0.00015
+       -0.00020
+       -0.00030
+       -0.00045
+       -0.00065
+       -0.00090
+       -0.00120
+       -0.00160
+       -0.00210
+       -0.00270
+       -0.00330
+       -0.00400 ];
+
+    [xl,yl] = meshgrid(x_local, y_local);
+    xl = xl(:);
+    yl = yl(:);
+
+    % ----------------------------------------
+    % 5B. Extra rear transition points
+    % Helps avoid ugly fan at the opposite corner
+    % ----------------------------------------
+    x_rear = linspace(0.0108, 0.0120, 6);
+    y_rear = linspace(-0.0040, 0.0000, 6);
+
+    [xr,yr] = meshgrid(x_rear, y_rear);
+    xr = xr(:);
+    yr = yr(:);
+
+    % ----------------------------------------
+    % 6. Combine all candidate points
+    % ----------------------------------------
+    x_candidate = [xg; xl; xr];
+    y_candidate = [yg; yl; yr];
+    
+    % ----------------------------------------
+    % 7. Keep only points inside or on the tool boundary
+    % ----------------------------------------
+    inside = inpolygon(x_candidate, y_candidate, xb, yb);
+
+    x_int = x_candidate(inside);
+    y_int = y_candidate(inside);
+
+    % ----------------------------------------
+    % 8. Add boundary points explicitly
+    % ----------------------------------------
+    X = [xb; x_int];
+    Y = [yb; y_int];
+
+    % ----------------------------------------
+    % 9. Remove duplicate points
+    % ----------------------------------------
+    P = unique([X Y], 'rows', 'stable');
+    X = P(:,1);
+    Y = P(:,2);
+
+    % ----------------------------------------
+    % 10. Delaunay triangulation
+    % ----------------------------------------
+    DT = delaunayTriangulation(X,Y);
+    tri = DT.ConnectivityList;
+
+    % ----------------------------------------
+    % 11. Keep only triangles whose centroid is inside boundary
+    % ----------------------------------------
+    xc = (X(tri(:,1)) + X(tri(:,2)) + X(tri(:,3))) / 3;
+    yc = (Y(tri(:,1)) + Y(tri(:,2)) + Y(tri(:,3))) / 3;
+
+    keep = inpolygon(xc, yc, xb, yb);
+    ncon = tri(keep,:);
+
+    % ----------------------------------------
+    % 12. Force counterclockwise ordering
+    % ----------------------------------------
+    for i = 1:size(ncon,1)
+
+        n1 = ncon(i,1);
+        n2 = ncon(i,2);
+        n3 = ncon(i,3);
+
+        A = 0.5 * det([1 X(n1) Y(n1);
+                       1 X(n2) Y(n2);
+                       1 X(n3) Y(n3)]);
+
+        if A < 0
+            temp = ncon(i,2);
+            ncon(i,2) = ncon(i,3);
+            ncon(i,3) = temp;
+        end
+    end
+
+end
